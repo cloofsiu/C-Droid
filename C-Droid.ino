@@ -1,7 +1,9 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include "pitches.h" 
 
 const int buttonPin = 9; // The pin that the button is attached to
+const int buzzerPin = 10; // The pin that the buzzer is attached to
 
 // Set the LCD I2C address
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -34,6 +36,7 @@ void setup() {
     lcd.backlight();
     Serial.begin(9600);
     pinMode(buttonPin, INPUT_PULLUP); // Initialize the button pin as an input with pull-up resistor
+    pinMode(buzzerPin, OUTPUT); // Initialize the buzzer pin as an output
 }
 void printFace(int emo[][16]){
     lcd.clear();
@@ -46,28 +49,87 @@ void printFace(int emo[][16]){
         }
     }
 }
+enum FaceState { NORMAL, SLEEPY, ANGRY };
+FaceState currentFace = NORMAL;
+unsigned long previousMillis = 0;
 
-void loop() {
- if (digitalRead(buttonPin) == LOW) { // Check if button is pressed
-        printFace(happyFace); // Show angry face
-        delay(3000); // Wait for 3 seconds
-        lcd.clear();
-    } else {
-    printFace(sleepyFace); // Using sleepyFace array
-    delay(500);
-    lcd.clear();
+int melody[] = {
+  NOTE_AS4, NOTE_AS4, NOTE_AS4,
+  NOTE_F5, NOTE_C6,
+  NOTE_AS5, NOTE_A5, NOTE_G5, NOTE_F6, NOTE_C6,
+  NOTE_AS5, NOTE_A5, NOTE_G5, NOTE_F6, NOTE_C6,
+  NOTE_AS5, NOTE_A5, NOTE_AS5, NOTE_G5, NOTE_C5, NOTE_C5, NOTE_C5,
+  NOTE_F5, NOTE_C6,
+  NOTE_AS5, NOTE_A5, NOTE_G5, NOTE_F6, NOTE_C6,
 
-    printFace(normalFace);
-    delay(5000);
-    lcd.clear();
-    
-    printFace(sleepyFace); // Using sleepyFace array
-    delay(200);
+  NOTE_AS5, NOTE_A5, NOTE_G5, NOTE_F6, NOTE_C6,
+  NOTE_AS5, NOTE_A5, NOTE_AS5, NOTE_G5, NOTE_C5, NOTE_C5,
+  NOTE_D5, NOTE_D5, NOTE_AS5, NOTE_A5, NOTE_G5, NOTE_F5,
+  NOTE_F5, NOTE_G5, NOTE_A5, NOTE_G5, NOTE_D5, NOTE_E5, NOTE_C5, NOTE_C5,
+  NOTE_D5, NOTE_D5, NOTE_AS5, NOTE_A5, NOTE_G5, NOTE_F5,
 
-    printFace(normalFace); // Using sleepyFace array
-    delay(500);
-    }
-  
+  NOTE_C6, NOTE_G5, NOTE_G5, REST, NOTE_C5,
+  NOTE_D5, NOTE_D5, NOTE_AS5, NOTE_A5, NOTE_G5, NOTE_F5,
+  NOTE_F5, NOTE_G5, NOTE_A5, NOTE_G5, NOTE_D5, NOTE_E5, NOTE_C6, NOTE_C6,
+  NOTE_F6, NOTE_DS6, NOTE_CS6, NOTE_C6, NOTE_AS5, NOTE_GS5, NOTE_G5, NOTE_F5,
+  NOTE_C6
+};
 
+int durations[] = {
+  8, 8, 8,
+  2, 2,
+  8, 8, 8, 2, 4,
+  8, 8, 8, 2, 4,
+  8, 8, 8, 2, 8, 8, 8,
+  2, 2,
+  8, 8, 8, 2, 4,
+
+  8, 8, 8, 2, 4,
+  8, 8, 8, 2, 8, 16,
+  4, 8, 8, 8, 8, 8,
+  8, 8, 8, 4, 8, 4, 8, 16,
+  4, 8, 8, 8, 8, 8,
+
+  8, 16, 2, 8, 8,
+  4, 8, 8, 8, 8, 8,
+  8, 8, 8, 4, 8, 4, 8, 16,
+  4, 8, 4, 8, 4, 8, 4, 8,
+  1
+};
+
+void playMelody() {
+  int size = sizeof(durations) / sizeof(int);
+  for (int note = 0; note < size; note++) {
+    int duration = 1000 / durations[note];
+    tone(buzzerPin, melody[note], duration);
+    int pauseBetweenNotes = duration * 1.30;
+    delay(pauseBetweenNotes);
+    noTone(buzzerPin);
+  }
 }
 
+void loop() {
+  unsigned long currentMillis = millis();
+
+  if (digitalRead(buttonPin) == LOW) {
+    currentFace = ANGRY;
+    printFace(angryFace); // Immediately show angry face
+    playMelody(); // Play an angry sound
+    previousMillis = currentMillis;
+  } else {
+    if (currentFace == ANGRY && currentMillis - previousMillis >= 3000) {
+      lcd.clear();
+      currentFace = NORMAL;
+      printFace(normalFace);
+      previousMillis = currentMillis;
+    } else if (currentFace == NORMAL && currentMillis - previousMillis >= 6000) {
+      currentFace = SLEEPY;
+      printFace(sleepyFace);
+      previousMillis = currentMillis;
+    } else if (currentFace == SLEEPY && currentMillis - previousMillis >= 300) {
+      currentFace = NORMAL;
+      printFace(normalFace);
+      previousMillis = currentMillis;
+    }
+  }
+}
